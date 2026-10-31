@@ -264,7 +264,7 @@ mod tests {
         use std::process::{Command, Stdio};
         // A shell whose child is a long sleep: the child is the foreground.
         let mut shell = Command::new("/bin/sh")
-            .args(["-c", "sleep 5"])
+            .args(["-c", "sleep 5; true"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .spawn()
