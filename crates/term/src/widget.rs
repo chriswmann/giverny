@@ -584,25 +584,42 @@ impl TabView {
                     horizontal_arrows: true,
                     vertical_arrows: true,
                 },
-            )
+            );
         });
+        // Check if we're in a full-screen app such as vim, so we can avoid swallowing
+        // CTRL+V (e.g. so we can enter visual mode in vim).
+        let alt_screen = mode.contains(TermMode::ALT_SCREEN);
+        let macos = cfg!(target_os = "macos");
         // Watched whether focused or not, so a V pressed while a text field
         // had the keyboard is still known to be pressed when it comes up.
         let paste_chord = &mut self.paste_chord;
         // Every event is fed, not just up to the first hit: the tracker has
         // to see them all.
         let empty_paste = ui.input(|i| {
-            i.events
-                .iter()
-                .filter(|ev| paste_chord.on_event(ev))
-                .count()
-                > 0
+            let mut hit = None;
+            for ev in &i.events {
+                if let Some(key) = paste_chord.on_event(ev) {
+                    hit = Some(key);
+                }
+            }
+            hit
         });
-        self.paste_image = empty_paste && response.has_focus();
+        let (ctrl, shift) = ui.input(|i| (i.modifiers.ctrl, i.modifiers.shift));
+        // A text paste arrives on the press frame, with the Ctrl key still down.
+        let chord_is_key = input::paste_chord_is_key(ctrl, shift, alt_screen, macos);
+        // An empty paste is seen at the V release, after Ctrl may have come up:
+        // a V that ended a chord was pressed with the Ctrl key down.
+        let release_is_key = empty_paste
+            .is_some_and(|key| input::paste_chord_is_key(key == Key::V, shift, alt_screen, macos));
+        self.paste_image = empty_paste.is_some() && !release_is_key && response.has_focus();
         if !response.has_focus() {
             return;
         }
         let mut bytes: Vec<u8> = Vec::new();
+        if release_is_key {
+            // The chord found no text and nothing was pasted, so provide the V key release
+            bytes.extend(input::encode_key(Key::V, Modifiers::CTRL, mode).unwrap_or_default());
+        }
         let mut copied = false;
         let mut zoom: i32 = 0;
         let mut zoom_reset = false;
@@ -662,8 +679,15 @@ impl TabView {
                         }
                     }
                     EguiEvent::Paste(s) => {
-                        let text = input::copied_files_text();
-                        bytes.extend(input::encode_paste(text.as_deref().unwrap_or(s), mode));
+                        if chord_is_key {
+                            bytes.extend(
+                                input::encode_key(Key::V, Modifiers::CTRL, mode)
+                                    .unwrap_or_default(),
+                            );
+                        } else {
+                            let text = input::copied_files_text();
+                            bytes.extend(input::encode_paste(text.as_deref().unwrap_or(s), mode));
+                        }
                     }
                     // Composed input — Hebrew, Arabic, CJK, anything going
                     // through the platform input method — arrives as an IME

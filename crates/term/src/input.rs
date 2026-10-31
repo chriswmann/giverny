@@ -310,6 +310,11 @@ pub fn clipboard_chord(cut: bool, shift: bool, macos: bool) -> ClipboardChord {
     }
 }
 
+// True when a swallowed CTRL+V should go to the child as a key, not paste
+pub fn paste_chord_is_key(ctrl: bool, shift: bool, alt_screen: bool, macos: bool) -> bool {
+    !macos && ctrl && !shift && alt_screen
+}
+
 /// Spots a paste chord that found no text in the clipboard: the cue to look
 /// for copied files or an image there instead.
 ///
@@ -332,13 +337,16 @@ pub struct PasteChord {
 }
 
 impl PasteChord {
-    /// Feed one input event; true when it ends a paste chord that found no
-    /// text, so the clipboard's image (if any) is what to paste.
-    pub fn on_event(&mut self, event: &egui::Event) -> bool {
+    /// Feed one input event. Returns the key that ended a paste chord that
+    /// found no text (V or the Paste key), so the clipboard's image (if any)
+    /// is what to paste. A V here was pressed with CRTL (CMD on MacOS) held,
+    /// even if CTRL has been released since: egui-winit only swallows the
+    /// press of that key.
+    pub fn on_event(&mut self, event: &egui::Event) -> Option<Key> {
         match event {
             egui::Event::Paste(_) => self.pasted_text = true,
             egui::Event::Key {
-                key: Key::V | Key::Paste,
+                key: key @ (Key::V | Key::Paste),
                 pressed,
                 ..
             } => {
@@ -349,12 +357,12 @@ impl PasteChord {
                     let found_text = self.pasted_text;
                     self.down = false;
                     self.pasted_text = false;
-                    return chord && !found_text;
+                    return (chord && !found_text).then_some(*key);
                 }
             }
             _ => {}
         }
-        false
+        None
     }
 }
 
@@ -560,29 +568,48 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_v_goes_to_full_screen_apps_as_a_key() {
+        // vim on the alt screen: Ctrl+V is visual block, not a paste.
+        assert!(paste_chord_is_key(true, false, true, false));
+        // Ctrl+Shift+V still pastes, and so does Ctrl+V at the shell.
+        assert!(!paste_chord_is_key(true, true, true, false));
+        assert!(!paste_chord_is_key(true, false, false, false));
+        // The Paste key (no Ctrl) pastes; macOS pastes with Cmd+V.
+        assert!(!paste_chord_is_key(false, false, true, false));
+        assert!(!paste_chord_is_key(true, false, true, true));
+        // What the child gets: SYN, the byte vim reads as Ctrl+V.
+        assert_eq!(
+            encode_key(Key::V, Modifiers::CTRL, TermMode::ALT_SCREEN),
+            Some(vec![0x16])
+        );
+    }
+
+    #[test]
     fn paste_chord_without_text_asks_for_an_image() {
         // Ctrl+V on an image-only clipboard: the press was swallowed and
         // no text came, so only the release is seen.
         let mut chord = PasteChord::default();
-        assert!(
+        assert_eq!(
             chord.on_event(&v(false)),
+            Some(Key::V),
             "a release never pressed: a chord"
         );
 
         // Ctrl+V with text: the text wins, and nothing more is asked.
         let mut chord = PasteChord::default();
-        assert!(!chord.on_event(&egui::Event::Paste("hi".into())));
-        assert!(!chord.on_event(&v(false)), "text came: no image paste");
+        assert_eq!(chord.on_event(&egui::Event::Paste("hi".into())), None);
+        assert_eq!(chord.on_event(&v(false)), None, "text came: no image paste");
         // ...and that release resets it, so the next empty chord asks again.
-        assert!(chord.on_event(&v(false)));
+        assert_eq!(chord.on_event(&v(false)), Some(Key::V));
 
         // A V typed as a letter is pressed and released: not a chord.
         let mut chord = PasteChord::default();
-        assert!(!chord.on_event(&v(true)));
-        assert!(!chord.on_event(&egui::Event::Text("v".into())));
-        assert!(!chord.on_event(&v(false)));
+        assert_eq!(chord.on_event(&v(true)), None);
+        assert_eq!(chord.on_event(&egui::Event::Text("v".into())), None);
+        assert_eq!(chord.on_event(&v(false)), None);
 
-        // The Paste key works the same way; other keys are no part of it.
+        // The Paste key works the same way, and says it was the Paste key;
+        // other keys are no part of it.
         let mut chord = PasteChord::default();
         let paste_key = egui::Event::Key {
             key: Key::Paste,
@@ -591,7 +618,7 @@ mod tests {
             repeat: false,
             modifiers: Modifiers::NONE,
         };
-        assert!(chord.on_event(&paste_key));
+        assert_eq!(chord.on_event(&paste_key), Some(Key::Paste));
         let c = egui::Event::Key {
             key: Key::C,
             physical_key: None,
@@ -599,7 +626,7 @@ mod tests {
             repeat: false,
             modifiers: Modifiers::COMMAND,
         };
-        assert!(!chord.on_event(&c), "a copy's release is no paste");
+        assert_eq!(chord.on_event(&c), None, "a copy's release is no paste");
     }
 
     #[test]
