@@ -87,36 +87,6 @@ pub fn parse(result: &Value) -> anyhow::Result<Vec<Window>> {
     Ok(out)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    #[test]
-    fn names_use_account_metadata_with_an_anonymous_fallback() {
-        assert_eq!(
-            account_name(&json!({"email":"bobobot@example.test"})).as_deref(),
-            Some("bobobot")
-        );
-        assert_eq!(account_name(&json!({"email":null})), None);
-        assert_eq!(account_name(&json!({"email":""})), None);
-        assert_eq!(
-            account_name(&json!({"email":"\nname\t@example.test"})).as_deref(),
-            Some("name")
-        );
-    }
-    #[test]
-    fn handles_catalog_without_duplicate_legacy_bucket() {
-        let bucket = json!({"primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":100},"secondary":null});
-        let v = json!({"rateLimits":bucket,"rateLimitsByLimitId":{"codex":bucket,"review":{"primary":{"usedPercent":0,"windowDurationMins":10080}}}});
-        let windows = parse(&v).unwrap();
-        assert_eq!(windows.len(), 2);
-        assert_eq!(windows[0].label, "codex 5h");
-        assert_eq!(windows[0].resets_at, Some(100));
-        assert!(parse(&json!({})).is_err());
-        assert!(parse(&json!({"rateLimits":{"primary":{"usedPercent":101}}})).is_err());
-    }
-}
-
 /// Giverny's own last successful readings, never Codex credentials.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
@@ -159,4 +129,34 @@ pub fn save_cache(path: &std::path::Path, snapshots: &[Snapshot]) -> anyhow::Res
     drop(file);
     std::fs::rename(temp, path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn names_use_account_metadata_with_an_anonymous_fallback() {
+        assert_eq!(
+            account_name(&json!({"email":"bobobot@example.test"})).as_deref(),
+            Some("bobobot")
+        );
+        assert_eq!(account_name(&json!({"email":null})), None);
+        assert_eq!(account_name(&json!({"email":""})), None);
+        assert_eq!(
+            account_name(&json!({"email":"\nname\t@example.test"})).as_deref(),
+            Some("name")
+        );
+    }
+    #[test]
+    fn handles_catalog_without_duplicate_legacy_bucket() {
+        let bucket = json!({"primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":100},"secondary":null});
+        let v = json!({"rateLimits":bucket,"rateLimitsByLimitId":{"codex":bucket,"review":{"primary":{"usedPercent":0,"windowDurationMins":10080}}}});
+        let windows = parse(&v).unwrap();
+        assert_eq!(windows.len(), 2);
+        assert_eq!(windows[0].label, "codex 5h");
+        assert_eq!(windows[0].resets_at, Some(100));
+        assert!(parse(&json!({})).is_err());
+        assert!(parse(&json!({"rateLimits":{"primary":{"usedPercent":101}}})).is_err());
+    }
 }
