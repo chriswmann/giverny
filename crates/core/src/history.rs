@@ -396,7 +396,7 @@ mod tests {
             );
             // Killed, not exited: what is in the file got there per command.
             let input = format!(
-                "echo one\nenv >{}\necho two\nkill -9 $$\n",
+                "echo one\n/usr/bin/env >{}\necho two\nkill -9 $$\n",
                 dir.join("env").display()
             );
             run_steered(&bash, &steer, &home, &input);
@@ -404,7 +404,7 @@ mod tests {
 
         let a = dir.join("a");
         run(false, &a);
-        let env_line = format!("env >{}\n", dir.join("env").display());
+        let env_line = format!("/usr/bin/env >{}\n", dir.join("env").display());
         assert_eq!(
             std::fs::read_to_string(&a).unwrap(),
             format!("echo one\n{env_line}echo two\n")
@@ -485,7 +485,10 @@ mod tests {
             &dir.join("init"),
             |k| (k == "ZDOTDIR").then(|| zdot_s.clone()),
         );
-        let input = format!("print one\nenv >{}\nexit\n", dir.join("env").display());
+        let input = format!(
+            "print one\n/usr/bin/env >{}\nexit\n",
+            dir.join("env").display()
+        );
         run_steered(&zsh, &steer, &home, &input);
         assert!(
             std::fs::read_to_string(&tab)
