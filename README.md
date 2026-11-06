@@ -63,6 +63,7 @@ Hook installation shows what it adds, keeps your existing hooks and writes a `.g
 | `Ctrl+Shift+T` / `Ctrl+Shift+W` | New tab / close tab |
 | `Ctrl+Shift+A` | Next tab where an agent needs you |
 | `Ctrl+Shift+P` | Tab palette |
+| `Ctrl+Shift+B` | Hide / show the rail |
 | `Ctrl+Shift+F` | Search scrollback |
 | `Ctrl+Shift+E` | Label paths and URLs on screen for quick open |
 | `Ctrl+Tab` | Recently used tabs |

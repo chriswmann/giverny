@@ -62,6 +62,11 @@ pub const BINDINGS: &[Binding] = &[
         scope: Scope::Global,
     },
     Binding {
+        chord: "Ctrl+Shift+B",
+        action: "hide / show the rail, from any screen",
+        scope: Scope::Global,
+    },
+    Binding {
         chord: "Ctrl+Tab / Ctrl+Shift+Tab",
         action: "back / forward through recently used tabs (hold Ctrl to keep going)",
         scope: Scope::Global,

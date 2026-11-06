@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `Ctrl+Shift+B` hides and shows the rail, from the shell, a full screen app
+  such as vim, or settings. The terminal takes the freed width, and the rail
+  stays as you left it across restarts. Dragging its edge past the minimum
+  width hides it too.
+
 ## v1.7.3 — 2026-11-05
 
 - New theme **red-rock**, from Mark Badolato's iTerm2-Color-Schemes

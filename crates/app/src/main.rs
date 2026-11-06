@@ -926,6 +926,8 @@ pub enum Action {
     RestartNow,
     ToggleSettings,
     ToggleKeys,
+    /// Hide or show the rail.
+    ToggleRail,
     /// Write one option back to config.toml and apply it now.
     SetSetting(String, giverny_core::settings::Value),
     /// Open config.toml in $EDITOR, in a tab.
@@ -2055,6 +2057,12 @@ impl App {
                     Some(_) => None,
                     None => Some(keymap::KeysOverlay::default()),
                 };
+            }
+            Action::ToggleRail => {
+                self.layout.rail_hidden = !self.layout.rail_hidden;
+                self.state_dirty = true;
+                // Nothing in a hidden rail can keep the keyboard.
+                self.focus_terminal = true;
             }
             Action::SetSetting(key, value) => {
                 let Some(def) = giverny_core::settings::by_key(&key) else {
@@ -3263,7 +3271,11 @@ impl App {
         if !maximized && size.x > 0.0 && size.y > 0.0 {
             self.layout.window = Some([size.x, size.y]);
         }
-        if let Some(rail) = egui::PanelState::load(ctx, egui::Id::new("rail")) {
+        // A hidden or sliding rail's size is not the width to reopen at.
+        if !self.layout.rail_hidden
+            && let Some(rail) = egui::PanelState::load(ctx, egui::Id::new("rail"))
+            && rail.size().x >= RAIL_MIN
+        {
             self.layout.rail_width = Some(rail.size().x);
         }
         // Ctrl+± is egui's own zoom; read it back rather than intercepting
@@ -3283,6 +3295,7 @@ impl App {
         let changed = self.layout.maximized != before.maximized
             || self.layout.work_area != before.work_area
             || self.layout.zoom != before.zoom
+            || self.layout.rail_hidden != before.rail_hidden
             || moved(self.layout.rail_width, before.rail_width)
             || moved(
                 self.layout.window.map(|w| w[0]),
@@ -3844,6 +3857,11 @@ impl App {
             if i.consume_key(cs, Key::P) {
                 actions.push(Action::TogglePalette);
             }
+            // Consumed here, before the grid sees keys, so it works in full
+            // screen apps too.
+            if i.consume_key(cs, Key::B) {
+                actions.push(Action::ToggleRail);
+            }
             if i.consume_key(Modifiers::CTRL, Key::Comma) {
                 actions.push(Action::ToggleSettings);
             }
@@ -4097,6 +4115,7 @@ impl eframe::App for App {
                 });
         }
 
+        let mut rail_shown = !self.layout.rail_hidden;
         egui::Panel::left("rail")
             .resizable(true)
             .default_size(
@@ -4105,9 +4124,14 @@ impl eframe::App for App {
                     .unwrap_or(240.0),
             )
             .size_range(RAIL_MIN..=RAIL_MAX)
-            .show(ui, |ui| {
+            .show_collapsible(ui, &mut rail_shown, |ui| {
                 actions.extend(rail::show(self, ui));
             });
+        // Dragging the edge past the minimum hides it too.
+        if rail_shown == self.layout.rail_hidden {
+            self.layout.rail_hidden = !rail_shown;
+            self.focus_terminal = true;
+        }
         self.track_layout(&ctx);
 
         for action in actions.drain(..) {

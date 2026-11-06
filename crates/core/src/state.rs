@@ -43,6 +43,9 @@ pub struct Layout {
     pub maximized: bool,
     #[serde(default)]
     pub rail_width: Option<f32>,
+    /// The rail is hidden (Ctrl+Shift+B, or dragged past its minimum width).
+    #[serde(default)]
+    pub rail_hidden: bool,
     /// How the rail groups tabs.
     #[serde(default)]
     pub rail_view: RailView,
@@ -280,6 +283,7 @@ mod tests {
                 window: Some([1000.0, 700.0]),
                 maximized: false,
                 rail_width: Some(300.0),
+                rail_hidden: true,
                 rail_view: RailView::Repos,
                 collapsed_repos: vec![PathBuf::from("/home/x/proj")],
                 zoom: Some(1.7),
@@ -296,6 +300,7 @@ mod tests {
         // How the rail was arranged is part of where you left off.
         assert_eq!(back.layout.rail_view, RailView::Repos);
         assert_eq!(back.layout.collapsed_repos.len(), 1);
+        assert!(back.layout.rail_hidden);
         // So is the interface zoom (#62: it came back at 1.0 every restart).
         assert_eq!(back.layout.zoom(), Some(1.7));
         // And the settings section last looked at.
